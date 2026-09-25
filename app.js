@@ -282,10 +282,20 @@ const app = {
                         <div><label class="block text-sm font-medium text-slate-700 mb-1">Password</label><div class="relative"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><i class="ph ph-lock text-slate-400 text-lg"></i></div><input type="password" id="password" class="pl-10 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" required></div></div>
                         <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-blue-700 shadow-md transition-all">เข้าสู่ระบบ</button>
                     </form>
-                    <div class="mt-8 bg-slate-50 rounded-lg p-4 text-xs text-slate-500 border border-slate-200"><p class="font-bold text-slate-700 mb-2">บัญชีทดสอบ (Password: 123):</p><div class="grid grid-cols-2 gap-2"><div>• admin</div><div>• purchasing</div><div>• warehouse</div><div>• sales</div><div>• accounting</div><div>• management</div></div></div>
+
+                    <!-- Supabase Connection Badge on Login -->
+                    <div class="mt-6 pt-4 border-t border-slate-200 flex items-center justify-between text-xs">
+                        <span class="text-slate-500 font-medium">Cloud Database:</span>
+                        <button type="button" id="supabase-login-badge" onclick="supabaseService.openConfigModal()" class="flex items-center gap-1.5 px-3 py-1 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 transition-colors shadow-2xs cursor-pointer">
+                            <span class="w-2 h-2 rounded-full bg-slate-400"></span> <span>Supabase: โหมด Local (คลิกเชื่อมต่อ)</span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 bg-slate-50 rounded-lg p-4 text-xs text-slate-500 border border-slate-200"><p class="font-bold text-slate-700 mb-2">บัญชีทดสอบ (Password: 123):</p><div class="grid grid-cols-2 gap-2"><div>• admin</div><div>• purchasing</div><div>• warehouse</div><div>• sales</div><div>• accounting</div><div>• management</div></div></div>
                 </div>
             </div>
         `;
+        if (window.supabaseService) window.supabaseService.updateHeaderBadge();
     },
 
     toggleSidebar: function() {
@@ -361,10 +371,12 @@ const app = {
                             <h1 class="text-lg font-bold text-slate-800 hidden sm:block uppercase tracking-wide" id="top-header-title">Dashboard</h1>
                         </div>
                         <div class="flex items-center gap-3">
-                            <!-- Supabase Status Badge -->
-                            <button id="supabase-status-badge" onclick="supabaseService.openConfigModal()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 transition-colors cursor-pointer shadow-xs">
+                            ${role === 'admin' ? `
+                            <!-- Supabase Status Badge (Admin Only) -->
+                            <button id="supabase-status-badge" onclick="supabaseService.openConfigModal()" class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 transition-colors cursor-pointer shadow-xs">
                                 <span class="w-2 h-2 rounded-full bg-slate-400"></span> <span>Supabase: Local</span>
                             </button>
+                            ` : ''}
 
                             <div class="relative">
                                 <button id="profile-btn" onclick="app.toggleProfileMenu()" class="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-3 rounded-full border border-slate-200 transition-all shadow-sm">
@@ -468,7 +480,25 @@ const app = {
 
     renderDashboard: function(container) {
         const role = this.currentUser.role;
-        let html = `<div class="mb-6"><h2 class="text-2xl font-bold text-slate-800">แดชบอร์ด (Dashboard)</h2><p class="text-slate-500">ภาพรวมระบบสำหรับ ${this.roles[role].name}</p></div>`;
+        let html = `
+            <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800">แดชบอร์ด (Dashboard)</h2>
+                    <p class="text-slate-500">ภาพรวมระบบสำหรับ ${this.roles[role].name}</p>
+                </div>
+                ${role === 'admin' ? `
+                <div class="flex items-center gap-2">
+                    <button id="btn-dash-supabase-header" onclick="supabaseService.openConfigModal()" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-slate-800 hover:bg-slate-900 text-white cursor-pointer border border-slate-700">
+                        <i class="ph ph-database text-base text-amber-400"></i>
+                        <span>ตั้งค่า Supabase Online</span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+            ${role === 'admin' ? `<!-- Supabase Status Banner Card on Dashboard (Admin Only) -->
+            <div id="supabase-dashboard-status-banner"></div>` : ''}
+        `;
 
         // Calculate common metrics
         const totalSales = this.mockData.salesOrders.reduce((sum, so) => sum + so.total_amount, 0);
@@ -541,6 +571,7 @@ const app = {
             `;
         }
         container.innerHTML = html;
+        if (window.supabaseService) window.supabaseService.updateHeaderBadge();
     },
 
     renderUsers: function(container) {

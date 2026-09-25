@@ -50,13 +50,15 @@ const supabaseService = {
     },
 
     init: function() {
-        // Load stored credentials from localStorage & sanitize URL
-        const rawUrl = localStorage.getItem('oms_supabase_url') || '';
-        const storedUrl = this.cleanUrl(rawUrl);
-        const storedKey = (localStorage.getItem('oms_supabase_key') || '').trim();
-        const storedBucket = (localStorage.getItem('oms_supabase_bucket') || 'oms-storage').trim();
+        const defaultCfg = window.OMS_SUPABASE_DEFAULT_CONFIG || {};
 
-        if (rawUrl && rawUrl !== storedUrl) {
+        // Load stored credentials: Priority 1. localStorage, Priority 2. default config from js/supabase-config.js
+        const rawUrl = localStorage.getItem('oms_supabase_url') || defaultCfg.url || '';
+        const storedUrl = this.cleanUrl(rawUrl);
+        const storedKey = (localStorage.getItem('oms_supabase_key') || defaultCfg.key || '').trim();
+        const storedBucket = (localStorage.getItem('oms_supabase_bucket') || defaultCfg.bucket || 'oms-storage').trim();
+
+        if (rawUrl && rawUrl !== storedUrl && localStorage.getItem('oms_supabase_url')) {
             localStorage.setItem('oms_supabase_url', storedUrl);
         }
 
@@ -89,31 +91,159 @@ const supabaseService = {
         if (!this.client) return;
         try {
             const { data, error } = await this.client.from('system_settings').select('id').limit(1);
-            if (!error || (error && (error.message.includes('relation') || error.message.includes('not exist')))) {
+            if (!error || (error && (error.message.includes('relation') || error.message.includes('not exist') || error.code === '42P01'))) {
                 this.isConnected = true;
+                this.updateHeaderBadge();
+                // If tables exist, sync data in background
+                if (!error) {
+                    this.pullAllData().then(() => {
+                        console.log('[Supabase] Background data pulled successfully');
+                    }).catch(e => {
+                        console.warn('[Supabase] Pull data note:', e.message);
+                    });
+                }
+            } else {
+                console.warn('[Supabase] Ping check error:', error);
+                this.isConnected = false;
                 this.updateHeaderBadge();
             }
         } catch (e) {
             console.warn('[Supabase] Background ping error:', e);
+            this.isConnected = false;
+            this.updateHeaderBadge();
         }
     },
 
     updateHeaderBadge: function() {
         const badge = document.getElementById('supabase-status-badge');
-        if (!badge) return;
+        const loginBadge = document.getElementById('supabase-login-badge');
+        const dashBanner = document.getElementById('supabase-dashboard-status-banner');
+        const dashBtn = document.getElementById('btn-dash-supabase-header');
 
-        if (this.isConnected) {
-            badge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer shadow-xs";
-            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> <span>Supabase: Online</span>`;
-            badge.title = "เชื่อมต่อ Supabase Database & Storage เรียบร้อยแล้ว (คลิกเพื่อตั้งค่า/ซิงค์)";
-        } else if (this.isConfigured()) {
-            badge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100 transition-colors cursor-pointer shadow-xs";
-            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> <span>Supabase: Check Config</span>`;
-            badge.title = "มีข้อมูลเชื่อมต่อ แต่ยังไม่ตอบสนอง (คลิกเพื่อทดสอบ)";
-        } else {
-            badge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 transition-colors cursor-pointer shadow-xs";
-            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span> <span>Supabase: Local Mode</span>`;
-            badge.title = "ระบบกำลังทำงานด้วยโหมด Local (คลิกเพื่อเชื่อมต่อ Supabase)";
+        const isAdmin = typeof app !== 'undefined' && app.currentUser && app.currentUser.role === 'admin';
+
+        // 1. Dashboard Header Button (Admin Only)
+        if (dashBtn) {
+            if (!isAdmin) {
+                dashBtn.style.display = 'none';
+            } else {
+                dashBtn.style.display = 'flex';
+                if (this.isConnected) {
+                    dashBtn.className = "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer";
+                    dashBtn.innerHTML = `
+                        <i class="ph ph-database text-base text-emerald-200"></i>
+                        <span>Supabase: Online</span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-pulse"></span>
+                    `;
+                    dashBtn.title = "Supabase Database & Storage กำลังออนไลน์ (คลิกเพื่อดูการตั้งค่า)";
+                } else if (this.isConfigured()) {
+                    dashBtn.className = "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-amber-600 hover:bg-amber-700 text-white cursor-pointer";
+                    dashBtn.innerHTML = `
+                        <i class="ph ph-plugs text-base text-amber-200"></i>
+                        <span>Supabase: Check Config</span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-300 animate-pulse"></span>
+                    `;
+                    dashBtn.title = "มีข้อมูลเชื่อมต่อ แต่ยังไม่ตอบสนอง (คลิกเพื่อทดสอบ)";
+                } else {
+                    dashBtn.className = "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-slate-800 hover:bg-slate-900 text-white cursor-pointer border border-slate-700";
+                    dashBtn.innerHTML = `
+                        <i class="ph ph-database text-base text-amber-400"></i>
+                        <span>ตั้งค่า Supabase Online</span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                    `;
+                    dashBtn.title = "คลิกเพื่อเชื่อมต่อ Supabase Database & Storage สำหรับผู้ดูแลระบบ";
+                }
+            }
+        }
+
+        // 2. Header Badge (Admin Only)
+        if (badge) {
+            if (!isAdmin) {
+                badge.style.display = 'none';
+            } else {
+                badge.style.display = 'flex';
+                if (this.isConnected) {
+                    badge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 transition-all cursor-pointer shadow-xs";
+                    badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span> <span>Supabase: Online</span>`;
+                    badge.title = "เชื่อมต่อ Supabase Database & Storage เรียบร้อยแล้ว (คลิกเพื่อตั้งค่า/ซิงค์)";
+                } else if (this.isConfigured()) {
+                    badge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100 transition-all cursor-pointer shadow-xs";
+                    badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span> <span>Supabase: Check Config</span>`;
+                    badge.title = "มีข้อมูลเชื่อมต่อ แต่ยังไม่ตอบสนอง (คลิกเพื่อทดสอบ/ดูสิทธิ์)";
+                } else {
+                    badge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 transition-all cursor-pointer shadow-xs";
+                    badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> <span>Supabase: โหมด Local (คลิกเชื่อมต่อ)</span>`;
+                    badge.title = "ระบบกำลังทำงานด้วยโหมด Local - คลิกเพื่อเชื่อมต่อ Supabase Database & Storage";
+                }
+            }
+        }
+
+        // 3. Login Page Badge
+        if (loginBadge) {
+            if (this.isConnected) {
+                loginBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer";
+                loginBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> <span>Supabase: Online</span>`;
+            } else if (this.isConfigured()) {
+                loginBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100 transition-colors cursor-pointer";
+                loginBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> <span>Supabase: Check Config</span>`;
+            } else {
+                loginBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 transition-colors cursor-pointer";
+                loginBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span> <span>Supabase: โหมด Local (คลิกเชื่อมต่อ)</span>`;
+            }
+        }
+
+        // 4. Dashboard Banner (Admin Only)
+        if (dashBanner) {
+            if (!isAdmin) {
+                dashBanner.innerHTML = '';
+            } else if (this.isConnected) {
+                dashBanner.className = "mb-6 p-4 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-emerald-900 shadow-xs";
+                dashBanner.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl flex-shrink-0 shadow-2xs font-bold">
+                            ⚡
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm text-emerald-950 flex items-center gap-2">
+                                <span>Supabase Cloud Database & Storage: Online</span>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-200 text-emerald-800">เชื่อมต่อแล้ว</span>
+                            </div>
+                            <div class="text-xs text-emerald-700 mt-0.5">
+                                เชื่อมต่อฐานข้อมูล PostgreSQL บน Cloud และพร้อมบันทึกรูปภาพสลิปบน Storage เรียบร้อยแล้ว (สิทธิ์: ผู้ดูแลระบบ Admin)
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button onclick="supabaseService.openConfigModal()" class="px-4 py-2 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-bold text-xs shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+                            <i class="ph ph-gear text-sm"></i> ตั้งค่าระบบ Supabase
+                        </button>
+                    </div>
+                `;
+            } else {
+                dashBanner.className = "mb-6 p-4 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs";
+                dashBanner.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl flex-shrink-0 font-bold">
+                            <i class="ph ph-database"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm text-slate-800 flex items-center gap-2">
+                                <span>สถานะฐานข้อมูล: กำลังทำงานในโหมดจำลอง (Local Mockup Mode)</span>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900">ยังไม่ออนไลน์</span>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">เฉพาะผู้ดูแลระบบ (Admin)</span>
+                            </div>
+                            <div class="text-xs text-slate-600 mt-0.5">
+                                💡 เมื่อเปิดผ่าน <b>GitHub Pages</b> เบราว์เซอร์จะแยก LocalStorage ตามโดเมน ให้ผู้ดูแลระบบกดปุ่ม <b>"ตั้งค่า Supabase Online"</b> เพื่อกรอก URL & Key หรือใส่ใน <code>js/supabase-config.js</code> เพื่อให้ออนไลน์ถาวร
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0 w-full md:w-auto justify-end">
+                        <button onclick="supabaseService.openConfigModal()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer">
+                            <i class="ph ph-plugs text-sm"></i> ตั้งค่า Supabase Online
+                        </button>
+                    </div>
+                `;
+            }
         }
     },
 
@@ -679,6 +809,23 @@ const supabaseService = {
                             </div>
                         </div>
 
+                        <!-- GitHub Config Helper Section -->
+                        <div class="bg-indigo-50/90 border border-indigo-200 rounded-xl p-4 text-xs">
+                            <div class="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+                                <div class="font-bold text-indigo-950 flex items-center gap-1.5 text-xs">
+                                    <i class="ph ph-github-logo text-base text-indigo-700"></i>
+                                    <span>ต้องการให้ Online อัตโนมัติบน GitHub Pages สำหรับทุกคน?</span>
+                                </div>
+                                <button type="button" onclick="supabaseService.copyConfigSnippet()" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] shadow-xs flex items-center gap-1 transition-colors">
+                                    <i class="ph ph-copy"></i> คัดลอกโค้ดไปใส่ js/supabase-config.js
+                                </button>
+                            </div>
+                            <p class="text-indigo-800 leading-relaxed text-[11px]">
+                                เบราว์เซอร์แยก <b>LocalStorage</b> ตามโดเมน เมื่อนำไปเปิดบน <b>GitHub</b> จึงกลับเป็นโหมด Local 
+                                คุณสามารถกดปุ่ม <b>"คัดลอกโค้ด"</b> ด้านบน นำไปวางในไฟล์ <code>js/supabase-config.js</code> แล้ว Commit & Push ขึ้น GitHub เว็บไซต์บน GitHub จะเชื่อมต่อเป็น <b>Supabase: Online</b> ทันทีสำหรับทุกคน!
+                            </p>
+                        </div>
+
                         <!-- Action Tools -->
                         <div class="border-t pt-4 space-y-3">
                             <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -776,6 +923,38 @@ const supabaseService = {
 
         await this.saveConfig(url, key, bucket);
         app.closeModal();
+    },
+
+    copyConfigSnippet: function() {
+        let url = (document.getElementById('sb_url') ? document.getElementById('sb_url').value : this.config.url) || '';
+        url = this.cleanUrl(url);
+        const key = (document.getElementById('sb_key') ? document.getElementById('sb_key').value : this.config.key) || '';
+        const bucket = (document.getElementById('sb_bucket') ? document.getElementById('sb_bucket').value : this.config.bucket) || 'oms-storage';
+
+        if (!url || !key) {
+            if (typeof app !== 'undefined' && app.showToast) {
+                app.showToast('กรุณากรอก Supabase URL และ Anon Key ในฟอร์มก่อนคัดลอก', 'warning');
+            }
+            return;
+        }
+
+        const snippet = `/**
+ * OMS (Operation Management System) - Supabase Default Configuration
+ * File: js/supabase-config.js
+ * 
+ * กำหนดค่าสำหรับการเชื่อมต่อ Supabase บน GitHub Pages หรือโฮสติ้งสาธารณะ
+ */
+
+window.OMS_SUPABASE_DEFAULT_CONFIG = {
+    url: '${url}',
+    key: '${key}',
+    bucket: '${bucket}'
+};
+`;
+        navigator.clipboard.writeText(snippet);
+        if (typeof app !== 'undefined' && app.showToast) {
+            app.showToast('คัดลอกโค้ดตั้งค่าเรียบร้อย! นำไปวางใน js/supabase-config.js แล้ว Push ขึ้น GitHub ได้เลย', 'success');
+        }
     },
 
     copyGrantSql: function() {
