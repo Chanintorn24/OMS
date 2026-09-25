@@ -727,11 +727,18 @@ app.renderSalesReceipts = function(container) {
                 <td class="px-6 py-4 font-mono font-bold text-blue-600">${sr.so_no}</td>
                 <td class="px-6 py-4 font-mono font-bold text-emerald-600 text-right">฿${(sr.amount||0).toLocaleString()}</td>
                 <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-bold border">${sr.method}</span></td>
+                <td class="px-6 py-4 text-center">
+                    ${sr.slip_url ? `
+                        <button onclick="supabaseService.openImagePreview('${sr.slip_url}', 'สลิปโอนเงิน ${sr.so_no}')" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 font-bold transition-colors">
+                            <i class="ph ph-file-image text-sm"></i> ดูสลิป
+                        </button>
+                    ` : '<span class="text-xs text-slate-400">-</span>'}
+                </td>
                 <td class="px-6 py-4">${statusBadge}</td>
                 <td class="px-6 py-4 text-xs text-slate-500">${sr.sales_person}</td>
                 <td class="px-6 py-4 text-center">
                     ${sr.status === 'Pending' ? `
-                    <button onclick="app.openApproveReceiptModal(${sr.id})" class="text-amber-600 hover:text-amber-700 p-1.5 rounded-lg hover:bg-amber-50 font-bold text-xs border border-amber-300" title="ตรวจสอบสลิป/อนุมัติ">
+                    <button onclick="app.openApproveReceiptModal(${sr.id})" class="text-amber-600 hover:text-amber-700 px-2.5 py-1 rounded-lg hover:bg-amber-50 font-bold text-xs border border-amber-300" title="ตรวจสอบสลิป/อนุมัติ">
                         <i class="ph ph-check mr-1"></i> ตรวจสอบ
                     </button>` : '<i class="ph ph-check-circle text-emerald-500 text-xl"></i>'}
                 </td>
@@ -745,6 +752,9 @@ app.renderSalesReceipts = function(container) {
                 <h2 class="text-2xl font-bold text-slate-800">บัญชีลูกหนี้/รับชำระเงิน (Accounts Receivable)</h2>
                 <p class="text-slate-500 text-sm">ตรวจสอบรายการรับชำระเงิน สลิปโอนเงิน และตัดหนี้ลูกค้ารายการขาย</p>
             </div>
+            <button onclick="app.openAddReceiptModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-medium shadow-sm flex items-center gap-2 transition-all">
+                <i class="ph ph-receipt text-lg"></i> + แจ้งการเก็บเงิน / แนบสลิป
+            </button>
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm border overflow-x-auto">
@@ -756,12 +766,13 @@ app.renderSalesReceipts = function(container) {
                         <th class="px-6 py-4">อ้างอิง SO/INV</th>
                         <th class="px-6 py-4 text-right">จำนวนเงิน (บาท)</th>
                         <th class="px-6 py-4">ช่องทาง</th>
+                        <th class="px-6 py-4 text-center">สลิปโอนเงิน</th>
                         <th class="px-6 py-4">สถานะ</th>
                         <th class="px-6 py-4">ผู้บันทึก</th>
                         <th class="px-6 py-4 text-center">จัดการ</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y">${rows || '<tr><td colspan="8" class="text-center py-8 text-slate-400">ยังไม่มีรายการรับชำระเงิน</td></tr>'}</tbody>
+                <tbody class="divide-y">${rows || '<tr><td colspan="9" class="text-center py-8 text-slate-400">ยังไม่มีรายการรับชำระเงิน</td></tr>'}</tbody>
             </table>
         </div>
     `;
@@ -773,21 +784,34 @@ app.openApproveReceiptModal = function(receiptId) {
 
     const html = `
         <div class="fixed inset-0 bg-black/50 flex justify-center items-center p-4 z-50">
-            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col animate-fade-in">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col animate-fade-in max-h-[90vh] overflow-hidden">
                 <div class="flex justify-between items-center p-5 border-b bg-slate-50 rounded-t-2xl">
                     <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
                         <i class="ph ph-check-circle text-emerald-600 text-xl"></i> ตรวจสอบสลิปการรับชำระเงิน
                     </h3>
                     <button onclick="app.closeModal()" class="text-slate-400 hover:text-slate-700 text-xl"><i class="ph ph-x"></i></button>
                 </div>
-                <div class="p-6 space-y-4">
+                <div class="p-6 space-y-4 overflow-y-auto">
                     <div class="bg-slate-50 p-4 rounded-xl border text-sm space-y-2">
                         <div><span class="text-slate-500">ลูกค้า:</span> <strong>${sr.customer_name}</strong></div>
                         <div><span class="text-slate-500">อ้างอิง SO:</span> <strong>${sr.so_no}</strong></div>
-                        <div><span class="text-slate-500">จำนวนเงิน:</span> <strong class="text-lg text-emerald-600 font-mono">฿${sr.amount.toLocaleString()}</strong></div>
+                        <div><span class="text-slate-500">จำนวนเงิน:</span> <strong class="text-lg text-emerald-600 font-mono">฿${(sr.amount||0).toLocaleString()}</strong></div>
                         <div><span class="text-slate-500">วิธีการชำระ:</span> ${sr.method}</div>
                         <div><span class="text-slate-500">วันที่:</span> ${sr.date}</div>
+                        <div><span class="text-slate-500">ผู้แจ้ง:</span> ${sr.sales_person || '-'}</div>
                     </div>
+
+                    ${sr.slip_url ? `
+                    <div class="border rounded-xl p-3 bg-slate-50 text-center">
+                        <div class="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
+                            <span>รูปภาพสลิปที่แนบมา:</span>
+                            <button type="button" onclick="supabaseService.openImagePreview('${sr.slip_url}', 'สลิป ${sr.so_no}')" class="text-blue-600 hover:underline text-xs flex items-center gap-1 font-normal">
+                                <i class="ph ph-arrows-out"></i> ขยายเต็มจอ
+                            </button>
+                        </div>
+                        <img src="${sr.slip_url}" alt="Slip" class="max-h-56 mx-auto rounded-lg shadow-sm border border-slate-200 cursor-pointer object-contain" onclick="supabaseService.openImagePreview('${sr.slip_url}', 'สลิป ${sr.so_no}')">
+                    </div>
+                    ` : '<div class="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200 text-center">ไม่มีรูปภาพสลิปแนบมา</div>'}
                 </div>
                 <div class="p-5 border-t bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
                     <button type="button" onclick="app.closeModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold">ยกเลิก</button>
@@ -811,6 +835,219 @@ app.saveApproveReceipt = function(receiptId) {
     }
 
     this.showToast('อนุมัติการรับชำระเงินและปรับสถานะเป็น Completed เรียบร้อย', 'success');
+    this.closeModal();
+    this.renderSalesReceipts(document.getElementById('main-content'));
+};
+
+app.openAddReceiptModal = function(selectedSoId = null) {
+    const soList = (this.mockData.salesOrders || []).filter(s => s.payment_status !== 'Paid');
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    let soOptions = '<option value="">-- เลือกรายการสั่งขาย (SO) --</option>';
+    soList.forEach(s => {
+        const isSel = selectedSoId && s.id === selectedSoId ? 'selected' : '';
+        soOptions += `<option value="${s.id}" data-amount="${s.total_amount}" data-customer="${s.customer_name}" data-sono="${s.so_no}" ${isSel}>${s.so_no} - ${s.customer_name} (฿${(s.total_amount||0).toLocaleString()})</option>`;
+    });
+
+    const defaultCustomer = selectedSoId ? ((soList.find(s => s.id === selectedSoId)||{}).customer_name || '') : '';
+    const defaultAmount = selectedSoId ? ((soList.find(s => s.id === selectedSoId)||{}).total_amount || '') : '';
+
+    const html = `
+        <div class="fixed inset-0 bg-black/50 flex justify-center items-center p-4 z-50 animate-fade-in">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[92vh] overflow-hidden">
+                <div class="flex justify-between items-center p-5 border-b bg-gradient-to-r from-blue-700 to-indigo-700 text-white rounded-t-2xl">
+                    <h3 class="text-lg font-bold flex items-center gap-2">
+                        <i class="ph ph-receipt text-xl"></i> แจ้งการเก็บเงิน & แนบสลิปโอนเงิน
+                    </h3>
+                    <button onclick="app.closeModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+                </div>
+                <div class="p-6 space-y-4 overflow-y-auto">
+                    <form id="add-receipt-form" onsubmit="event.preventDefault(); app.handleSaveReceipt()" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">เลือกรายการสั่งขาย (SO) *</label>
+                            <select id="ar_so_id" onchange="app.onReceiptSoChange(this)" class="w-full border rounded-xl px-3 py-2 text-sm bg-white" required>
+                                ${soOptions}
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อลูกค้า/ร้านค้า</label>
+                                <input type="text" id="ar_customer" value="${defaultCustomer}" class="w-full border rounded-xl px-3 py-2 text-sm bg-slate-50 font-bold" readonly>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">จำนวนเงินที่ชำระ (บาท) *</label>
+                                <input type="number" id="ar_amount" value="${defaultAmount}" step="0.01" class="w-full border rounded-xl px-3 py-2 text-sm font-mono font-bold text-emerald-600" required>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">วันที่ชำระ *</label>
+                                <input type="date" id="ar_date" value="${todayStr}" class="w-full border rounded-xl px-3 py-2 text-sm" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">ช่องทางการชำระ *</label>
+                                <select id="ar_method" class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
+                                    <option value="โอนเงิน">โอนเงินผ่านธนาคาร</option>
+                                    <option value="เงินสด">เงินสด</option>
+                                    <option value="เช็ค">เช็คธนาคาร</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Image File Upload with Client-Side Compression -->
+                        <div class="border-t pt-4">
+                            <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                <span>แนบสลิปการโอนเงิน (รองรับบีบอัดอัตโนมัติ Client-Side)</span>
+                                <span class="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">Auto-Compress</span>
+                            </label>
+                            
+                            <div class="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-blue-500 transition-colors bg-slate-50">
+                                <input type="file" id="ar_slip_file" accept="image/*" onchange="app.handleSlipFileSelect(event)" class="hidden">
+                                <label for="ar_slip_file" class="cursor-pointer block">
+                                    <i class="ph ph-cloud-arrow-up text-3xl text-blue-600 mb-1"></i>
+                                    <div class="text-xs font-bold text-slate-700">คลิกเพื่อเลือกรูปภาพสลิป หรือลากไฟล์มาวาง</div>
+                                    <div class="text-[11px] text-slate-400 mt-0.5">ระบบจะบีบอัดขนาดไฟล์ก่อนอัปโหลดขึ้น Supabase Storage</div>
+                                </label>
+                            </div>
+
+                            <!-- Compression Stats & Preview Badge -->
+                            <div id="ar_slip_preview_box" class="hidden mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
+                                <img id="ar_slip_img_preview" class="w-14 h-14 object-cover rounded-lg border shadow-xs" src="">
+                                <div class="flex-1 text-xs">
+                                    <div class="font-bold text-emerald-900" id="ar_slip_filename">สลิป.jpg</div>
+                                    <div class="text-slate-600 flex items-center gap-2 mt-0.5">
+                                        <span>เดิม: <span id="ar_orig_size" class="font-mono line-through text-slate-400"></span></span>
+                                        <i class="ph ph-arrow-right text-xs"></i>
+                                        <span class="font-bold text-emerald-700 font-mono" id="ar_comp_size"></span>
+                                    </div>
+                                    <div class="text-[10px] text-emerald-600 font-bold mt-0.5">
+                                        ✓ บีบอัดสำเร็จ <span id="ar_saved_ratio" class="bg-emerald-600 text-white px-1.5 py-0.2 rounded-full"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="p-4 border-t bg-slate-50 flex justify-end gap-2.5 rounded-b-2xl">
+                    <button type="button" onclick="app.closeModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold text-xs">ยกเลิก</button>
+                    <button type="submit" form="add-receipt-form" id="btn-submit-receipt" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5">
+                        <i class="ph ph-check"></i> บันทึกและส่งตรวจสลิป
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    this.openModalHTML(html);
+};
+
+app.currentCompressedSlip = null;
+
+app.onReceiptSoChange = function(sel) {
+    const opt = sel.options[sel.selectedIndex];
+    if (opt && opt.value) {
+        document.getElementById('ar_customer').value = opt.getAttribute('data-customer') || '';
+        document.getElementById('ar_amount').value = opt.getAttribute('data-amount') || '';
+    } else {
+        document.getElementById('ar_customer').value = '';
+        document.getElementById('ar_amount').value = '';
+    }
+};
+
+app.handleSlipFileSelect = async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        this.showToast('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'warning');
+        return;
+    }
+
+    try {
+        const result = await supabaseService.compressImage(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.8 });
+        this.currentCompressedSlip = result;
+
+        const box = document.getElementById('ar_slip_preview_box');
+        const img = document.getElementById('ar_slip_img_preview');
+        const nameEl = document.getElementById('ar_slip_filename');
+        const origEl = document.getElementById('ar_orig_size');
+        const compEl = document.getElementById('ar_comp_size');
+        const ratioEl = document.getElementById('ar_saved_ratio');
+
+        if (box && img) {
+            img.src = result.previewUrl;
+            nameEl.innerText = file.name;
+            origEl.innerText = supabaseService.formatBytes(result.originalSize);
+            compEl.innerText = supabaseService.formatBytes(result.compressedSize);
+            ratioEl.innerText = '-' + result.ratio;
+            box.classList.remove('hidden');
+        }
+        this.showToast(`บีบอัดรูปภาพแล้ว (${supabaseService.formatBytes(result.originalSize)} ➔ ${supabaseService.formatBytes(result.compressedSize)})`, 'info');
+    } catch (err) {
+        console.error('Compression error:', err);
+        this.showToast('เกิดข้อผิดพลาดในการบีบอัดรูปภาพ', 'error');
+    }
+};
+
+app.handleSaveReceipt = async function() {
+    const soSel = document.getElementById('ar_so_id');
+    const soId = parseInt(soSel.value);
+    if (!soId) {
+        this.showToast('กรุณาเลือกรายการสั่งขาย (SO)', 'warning');
+        return;
+    }
+
+    const opt = soSel.options[soSel.selectedIndex];
+    const soNo = opt.getAttribute('data-sono');
+    const customer = document.getElementById('ar_customer').value;
+    const amount = parseFloat(document.getElementById('ar_amount').value) || 0;
+    const date = document.getElementById('ar_date').value;
+    const method = document.getElementById('ar_method').value;
+
+    const btn = document.getElementById('btn-submit-receipt');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="ph ph-spinner animate-spin"></i> กำลังอัปโหลด...`;
+    }
+
+    let slipUrl = null;
+    if (this.currentCompressedSlip && this.currentCompressedSlip.blob) {
+        try {
+            slipUrl = await supabaseService.uploadToStorage('slips', this.currentCompressedSlip.blob);
+        } catch (err) {
+            console.warn('Storage upload error, using preview:', err);
+            slipUrl = this.currentCompressedSlip.previewUrl;
+        }
+    }
+
+    const refNo = 'RC-' + new Date().getFullYear().toString().substring(2) + (new Date().getMonth()+1).toString().padStart(2,'0') + '-' + Math.floor(10+Math.random()*90);
+
+    const newReceipt = {
+        id: Date.now(),
+        ref_no: refNo,
+        so_no: soNo,
+        customer_name: customer,
+        amount: amount,
+        date: date,
+        method: method,
+        status: 'Pending',
+        sales_person: this.currentUser ? this.currentUser.fullname : 'sales',
+        slip_url: slipUrl
+    };
+
+    if (!this.mockData.salesReceipts) this.mockData.salesReceipts = [];
+    this.mockData.salesReceipts.unshift(newReceipt);
+
+    // Update SO payment status
+    const so = (this.mockData.salesOrders || []).find(x => x.id === soId);
+    if (so) {
+        so.payment_status = 'Pending Review';
+        if (slipUrl) so.slip_url = slipUrl;
+    }
+
+    this.currentCompressedSlip = null;
+    this.showToast('บันทึกการแจ้งชำระเงินและอัปโหลดสลิปเรียบร้อยแล้ว', 'success');
     this.closeModal();
     this.renderSalesReceipts(document.getElementById('main-content'));
 };

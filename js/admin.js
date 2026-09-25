@@ -423,6 +423,55 @@ app.renderSettings = function(container) {
                 </div>
             </form>
         </div>
+
+        <!-- Supabase Database & Storage Integration Card -->
+        <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl shadow-lg p-6 mb-8 border border-slate-700">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-700/80 pb-4 mb-5">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl shadow-inner font-bold">
+                        ⚡
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg flex items-center gap-2">
+                            Supabase Database & Storage Integration
+                            <span class="text-xs px-2.5 py-0.5 rounded-full ${window.supabaseService && window.supabaseService.isConnected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}">
+                                ${window.supabaseService && window.supabaseService.isConnected ? '● Connected (Online)' : '○ Local Mockup Mode'}
+                            </span>
+                        </h3>
+                        <p class="text-xs text-slate-300 mt-0.5">เชื่อมต่อฐานข้อมูล PostgreSQL บน Cloud, ถังเก็บรูปภาพสลิป และระบบบีบอัดรูปภาพฝั่งไคลเอนต์ (Client-Side Compression)</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="supabaseService.openConfigModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5">
+                        <i class="ph ph-gear"></i> ตั้งค่าเชื่อมต่อ Supabase
+                    </button>
+                    <button onclick="supabaseService.openSqlViewerModal()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5">
+                        <i class="ph ph-file-sql"></i> ดูคำสั่ง SQL
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
+                <div class="bg-white/5 border border-white/10 rounded-xl p-3.5">
+                    <div class="font-bold text-slate-100 flex items-center gap-1.5 mb-1 text-sm">
+                        <i class="ph ph-database text-blue-400"></i> Cloud Database (PostgreSQL)
+                    </div>
+                    <p class="text-slate-400">14 ตารางครอบคลุม SO, PO, สต็อก, ลูกค้า, ซัพพลายเออร์ และผู้ใช้งาน พร้อมสิทธิ์ RLS</p>
+                </div>
+                <div class="bg-white/5 border border-white/10 rounded-xl p-3.5">
+                    <div class="font-bold text-slate-100 flex items-center gap-1.5 mb-1 text-sm">
+                        <i class="ph ph-archive text-amber-400"></i> Supabase Storage
+                    </div>
+                    <p class="text-slate-400">Bucket <code class="text-emerald-300">oms-storage</code> จัดเก็บสลิปโอนเงิน, ใบกำกับภาษี และรูปสินค้า</p>
+                </div>
+                <div class="bg-white/5 border border-white/10 rounded-xl p-3.5">
+                    <div class="font-bold text-slate-100 flex items-center gap-1.5 mb-1 text-sm">
+                        <i class="ph ph-arrows-in-line-horizontal text-emerald-400"></i> Client-Side Compression
+                    </div>
+                    <p class="text-slate-400">บีบอัดรูปสลิปจาก 5-10MB เหลือ ~180KB อัตโนมัติในเบราว์เซอร์ก่อนส่งขึ้น Cloud</p>
+                </div>
+            </div>
+        </div>
     `;
 };
 

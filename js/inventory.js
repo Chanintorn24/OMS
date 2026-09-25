@@ -104,7 +104,12 @@ app.filterInventory = function() {
         return `
             <tr class="hover:bg-slate-50 transition-colors">
                 <td class="px-4 py-3.5 font-mono font-bold text-blue-600">${p.sku}</td>
-                <td class="px-4 py-3.5 font-medium text-slate-800">${p.name}</td>
+                <td class="px-4 py-3.5 font-medium text-slate-800">
+                    <div class="flex items-center gap-2.5">
+                        ${p.image_url ? `<img src="${p.image_url}" class="w-8 h-8 rounded-lg object-cover border cursor-pointer hover:opacity-80 transition-opacity" onclick="supabaseService.openImagePreview('${p.image_url}', '${p.name}')" title="คลิกดูภาพขยาย">` : '<div class="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 text-sm"><i class="ph ph-package"></i></div>'}
+                        <span>${p.name}</span>
+                    </div>
+                </td>
                 <td class="px-4 py-3.5 text-center">
                     <span class="px-2.5 py-1 rounded-full font-bold text-xs border ${p.stock_qty > 20 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : (p.stock_qty > 0 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200')}">
                         ${p.stock_qty} ${p.unit} <span class="text-[11px] font-normal">(${cartons} ลัง ${remainder} ${p.unit})</span>
@@ -284,11 +289,36 @@ app.openEditProductModal = function(productId) {
                                 <input type="number" id="ep_price" value="${p.wholesale_price || 0}" min="0" step="0.01" class="w-full border rounded-xl px-3 py-2 text-sm font-mono">
                             </div>
                         </div>
+
+                        <!-- Product Image Upload with Client-Side Compression -->
+                        <div class="border-t pt-3">
+                            <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                <span>รูปภาพสินค้า (จัดเก็บบน Supabase Storage)</span>
+                                <span class="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">Auto-Compress</span>
+                            </label>
+                            <input type="file" id="ep_image_file" accept="image/*" onchange="app.handleProductImageSelect(event)" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                            
+                            <div id="ep_preview_box" class="hidden mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-xs">
+                                <img id="ep_img_preview" class="w-12 h-12 object-cover rounded-lg border shadow-xs" src="">
+                                <div>
+                                    <div class="font-bold text-emerald-800" id="ep_filename">รูปสินค้า.jpg</div>
+                                    <div class="text-[11px] text-slate-600" id="ep_size_info"></div>
+                                </div>
+                            </div>
+
+                            ${p.image_url ? `
+                                <div class="mt-2 flex items-center gap-2 text-xs">
+                                    <img src="${p.image_url}" class="w-8 h-8 rounded object-cover border">
+                                    <span class="text-slate-600">มีรูปภาพปัจจุบันอยู่แล้ว</span>
+                                    <button type="button" onclick="supabaseService.openImagePreview('${p.image_url}', '${p.name}')" class="text-blue-600 underline font-bold">ดูรูป</button>
+                                </div>
+                            ` : ''}
+                        </div>
                     </form>
                 </div>
                 <div class="p-5 border-t bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
                     <button type="button" onclick="app.closeModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold">ยกเลิก</button>
-                    <button type="submit" form="edit-prod-form" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm">บันทึกการแก้ไข</button>
+                    <button type="submit" form="edit-prod-form" id="btn-save-prod" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm">บันทึกการแก้ไข</button>
                 </div>
             </div>
         </div>
@@ -296,9 +326,47 @@ app.openEditProductModal = function(productId) {
     this.openModalHTML(html);
 };
 
-app.saveEditProduct = function(productId) {
+app.currentCompressedProductImg = null;
+
+app.handleProductImageSelect = async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        this.showToast('กรุณาเลือกไฟล์รูปภาพ', 'warning');
+        return;
+    }
+
+    try {
+        const result = await supabaseService.compressImage(file, { maxWidth: 1000, maxHeight: 1000, quality: 0.8 });
+        this.currentCompressedProductImg = result;
+
+        const box = document.getElementById('ep_preview_box');
+        const img = document.getElementById('ep_img_preview');
+        const nameEl = document.getElementById('ep_filename');
+        const sizeEl = document.getElementById('ep_size_info');
+
+        if (box && img) {
+            img.src = result.previewUrl;
+            nameEl.innerText = file.name;
+            sizeEl.innerHTML = `${supabaseService.formatBytes(result.originalSize)} ➔ <span class="font-bold text-emerald-700">${supabaseService.formatBytes(result.compressedSize)}</span> (-${result.ratio})`;
+            box.classList.remove('hidden');
+        }
+        this.showToast('บีบอัดรูปภาพสินค้าเรียบร้อย', 'info');
+    } catch (err) {
+        console.error('Product image compression error:', err);
+    }
+};
+
+app.saveEditProduct = async function(productId) {
     const p = this.mockData.products.find(x => x.id === productId);
     if (!p) return;
+
+    const btn = document.getElementById('btn-save-prod');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="ph ph-spinner animate-spin"></i> กำลังบันทึก...`;
+    }
 
     p.name = document.getElementById('ep_name').value.trim();
     p.warehouse = document.getElementById('ep_wh').value;
@@ -308,6 +376,17 @@ app.saveEditProduct = function(productId) {
     p.cost_price = parseFloat(document.getElementById('ep_cost').value) || 0;
     p.wholesale_price = parseFloat(document.getElementById('ep_price').value) || 0;
 
+    if (this.currentCompressedProductImg && this.currentCompressedProductImg.blob) {
+        try {
+            const url = await supabaseService.uploadToStorage('products', this.currentCompressedProductImg.blob);
+            p.image_url = url;
+        } catch (err) {
+            console.warn('Storage upload error, using preview:', err);
+            p.image_url = this.currentCompressedProductImg.previewUrl;
+        }
+    }
+
+    this.currentCompressedProductImg = null;
     this.showToast('อัปเดตข้อมูลสินค้าเรียบร้อยแล้ว', 'success');
     this.closeModal();
     this.renderInventory(document.getElementById('main-content'));

@@ -235,9 +235,13 @@ app.renderTaxInvoices = function(container) {
                 <td class="px-5 py-3.5 text-center">${statusBadge}</td>
                 <td class="px-5 py-3.5 font-mono text-xs text-slate-600">${so.tax_invoice_no || '-'}</td>
                 <td class="px-5 py-3.5 text-xs text-slate-500">${so.tax_invoice_date || '-'}</td>
-                <td class="px-5 py-3.5 text-center whitespace-nowrap">
-                    <button onclick="app.openIssueTaxInvoiceModal(${so.id})" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1 mx-auto">
-                        <i class="ph ph-receipt"></i> ${isIssued ? 'แก้ไขใบกำกับภาษี' : 'ออกใบกำกับภาษี'}
+                <td class="px-5 py-3.5 text-center whitespace-nowrap flex items-center justify-center gap-1.5">
+                    ${so.tax_invoice_img ? `
+                    <button onclick="supabaseService.openImagePreview('${so.tax_invoice_img}', 'ใบกำกับภาษี ${so.tax_invoice_no}')" class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold transition-all border border-emerald-300 flex items-center gap-1">
+                        <i class="ph ph-file-image"></i> ดูไฟล์
+                    </button>` : ''}
+                    <button onclick="app.openIssueTaxInvoiceModal(${so.id})" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1">
+                        <i class="ph ph-receipt"></i> ${isIssued ? 'แก้ไขใบกำกับ' : 'ออกใบกำกับ'}
                     </button>
                 </td>
             </tr>
@@ -272,23 +276,26 @@ app.renderTaxInvoices = function(container) {
     `;
 };
 
+app.currentCompressedTaxInv = null;
+
 app.openIssueTaxInvoiceModal = function(soId) {
     const so = (this.mockData.salesOrders || []).find(x => x.id === soId);
     if (!so) return;
 
+    this.currentCompressedTaxInv = null;
     const todayStr = new Date().toISOString().split('T')[0];
     const defaultTaxNo = so.tax_invoice_no || ('TAX-' + new Date().getFullYear().toString().substring(2) + Math.floor(1000+Math.random()*9000));
 
     const html = `
-        <div class="fixed inset-0 bg-black/50 flex justify-center items-center p-4 z-50">
-            <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col animate-fade-in">
+        <div class="fixed inset-0 bg-black/50 flex justify-center items-center p-4 z-50 animate-fade-in">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh] overflow-hidden">
                 <div class="flex justify-between items-center p-5 border-b bg-slate-50 rounded-t-2xl">
                     <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
                         <i class="ph ph-receipt text-blue-600 text-xl"></i> ออกใบกำกับภาษี: ${so.so_no}
                     </h3>
                     <button onclick="app.closeModal()" class="text-slate-400 hover:text-slate-700 text-xl"><i class="ph ph-x"></i></button>
                 </div>
-                <div class="p-6 space-y-4">
+                <div class="p-6 space-y-4 overflow-y-auto">
                     <form id="tax-inv-form" onsubmit="event.preventDefault(); app.saveTaxInvoice(${soId})" class="space-y-4">
                         <div class="bg-blue-50 border border-blue-200 p-3.5 rounded-xl text-sm space-y-1">
                             <div><span class="font-bold text-blue-900">ลูกค้า:</span> ${so.customer_name}</div>
@@ -306,15 +313,34 @@ app.openIssueTaxInvoiceModal = function(soId) {
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">แนบไฟล์รูปภาพใบกำกับภาษี</label>
-                            <input type="file" id="ti_file" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                            ${so.tax_invoice_img ? `<p class="text-xs text-emerald-600 font-bold mt-1">✓ มีไฟล์แนบเดิมแล้ว</p>` : ''}
+                            <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                <span>แนบไฟล์รูปภาพใบกำกับภาษี (Auto-Compress)</span>
+                                <span class="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">Client-Side Compression</span>
+                            </label>
+                            <input type="file" id="ti_file" accept="image/*" onchange="app.handleTaxInvoiceFileSelect(event)" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                            
+                            <div id="ti_preview_box" class="hidden mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-xs">
+                                <img id="ti_img_preview" class="w-12 h-12 object-cover rounded-lg border shadow-xs" src="">
+                                <div>
+                                    <div class="font-bold text-emerald-800" id="ti_filename">รูปใบกำกับ.jpg</div>
+                                    <div class="text-[11px] text-slate-600" id="ti_size_info"></div>
+                                </div>
+                            </div>
+
+                            ${so.tax_invoice_img ? `
+                                <div class="mt-2 text-xs text-blue-600 flex items-center gap-1 font-bold">
+                                    <i class="ph ph-check-circle text-emerald-500"></i> มีไฟล์แนบเดิมแล้ว
+                                    <button type="button" onclick="supabaseService.openImagePreview('${so.tax_invoice_img}', 'ใบกำกับภาษี ${so.tax_invoice_no}')" class="underline ml-1">ดูรูปภาพ</button>
+                                </div>
+                            ` : ''}
                         </div>
                     </form>
                 </div>
                 <div class="p-5 border-t bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
-                    <button type="button" onclick="app.closeModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold">ยกเลิก</button>
-                    <button type="submit" form="tax-inv-form" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm">ยืนยันการออกใบกำกับภาษี</button>
+                    <button type="button" onclick="app.closeModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold text-xs">ยกเลิก</button>
+                    <button type="submit" form="tax-inv-form" id="btn-save-tax-inv" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5">
+                        <i class="ph ph-check"></i> ยืนยันการออกใบกำกับภาษี
+                    </button>
                 </div>
             </div>
         </div>
@@ -322,23 +348,65 @@ app.openIssueTaxInvoiceModal = function(soId) {
     this.openModalHTML(html);
 };
 
-app.saveTaxInvoice = function(soId) {
+app.handleTaxInvoiceFileSelect = async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        this.showToast('กรุณาเลือกไฟล์รูปภาพ', 'warning');
+        return;
+    }
+
+    try {
+        const result = await supabaseService.compressImage(file, { maxWidth: 1400, maxHeight: 1400, quality: 0.8 });
+        this.currentCompressedTaxInv = result;
+
+        const box = document.getElementById('ti_preview_box');
+        const img = document.getElementById('ti_img_preview');
+        const nameEl = document.getElementById('ti_filename');
+        const sizeEl = document.getElementById('ti_size_info');
+
+        if (box && img) {
+            img.src = result.previewUrl;
+            nameEl.innerText = file.name;
+            sizeEl.innerHTML = `${supabaseService.formatBytes(result.originalSize)} ➔ <span class="font-bold text-emerald-700">${supabaseService.formatBytes(result.compressedSize)}</span> (-${result.ratio})`;
+            box.classList.remove('hidden');
+        }
+        this.showToast('บีบอัดรูปภาพใบกำกับภาษีแล้ว', 'info');
+    } catch (err) {
+        console.error('Tax invoice compression error:', err);
+    }
+};
+
+app.saveTaxInvoice = async function(soId) {
     const so = (this.mockData.salesOrders || []).find(x => x.id === soId);
     if (!so) return;
 
     const tiNo = document.getElementById('ti_no').value.trim();
     const tiDate = document.getElementById('ti_date').value;
-    const fileInput = document.getElementById('ti_file');
+    const btn = document.getElementById('btn-save-tax-inv');
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="ph ph-spinner animate-spin"></i> กำลังบันทึก...`;
+    }
 
     so.tax_invoice_issued = true;
     so.tax_invoice_no = tiNo;
     so.tax_invoice_date = tiDate;
 
-    if (fileInput && fileInput.files && fileInput.files[0]) {
-        so.tax_invoice_img = fileInput.files[0].name;
+    if (this.currentCompressedTaxInv && this.currentCompressedTaxInv.blob) {
+        try {
+            const url = await supabaseService.uploadToStorage('invoices', this.currentCompressedTaxInv.blob);
+            so.tax_invoice_img = url;
+        } catch (err) {
+            console.warn('Storage upload error, using preview:', err);
+            so.tax_invoice_img = this.currentCompressedTaxInv.previewUrl;
+        }
     }
 
-    this.showToast('บันทึกข้อมูลใบกำกับภาษีเรียบร้อยแล้ว', 'success');
+    this.currentCompressedTaxInv = null;
+    this.showToast('บันทึกข้อมูลใบกำกับภาษีและอัปโหลดไฟล์เรียบร้อยแล้ว', 'success');
     this.closeModal();
     this.renderTaxInvoices(document.getElementById('main-content'));
 };

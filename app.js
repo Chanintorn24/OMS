@@ -339,7 +339,7 @@ const app = {
                         ${['admin', 'sales', 'management'].includes(role) ? `
                         <div class="pt-4 pb-1 text-xs font-bold text-slate-500 uppercase tracking-wider pl-4">ระบบการขาย</div>
                         <li><a href="#" onclick="app.switchMenu('customers')" class="block px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded text-sm"><i class="ph ph-users-three mr-2 align-text-bottom"></i> ข้อมูลลูกค้า/ร้านค้า</a></li>
-                        <li><a href="#" onclick="app.switchMenu('sales_orders')" class="block px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded text-sm"><i class="ph ph-file-text mr-2 align-text-bottom"></i> รายการสั่งซื้อ (SO)</a></li>
+                        <li><a href="#" onclick="app.switchMenu('sales_orders')" class="block px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded text-sm"><i class="ph ph-file-text mr-2 align-text-bottom"></i> รายการสั่งขาย (SO)</a></li>
                         <li><a href="#" onclick="app.switchMenu('sales_receipts')" class="block px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded text-sm"><i class="ph ph-money mr-2 align-text-bottom"></i> แจ้งการเก็บเงิน</a></li>
                         <li><a href="#" onclick="app.switchMenu('so_history')" class="block px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded text-sm"><i class="ph ph-clock-counter-clockwise mr-2 align-text-bottom"></i> ประวัติการสั่งซื้อลูกค้า</a></li>
                         ` : ''}
@@ -360,7 +360,12 @@ const app = {
                             <button onclick="app.toggleSidebar()" class="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors"><i class="ph ph-list text-2xl"></i></button>
                             <h1 class="text-lg font-bold text-slate-800 hidden sm:block uppercase tracking-wide" id="top-header-title">Dashboard</h1>
                         </div>
-                        <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-3">
+                            <!-- Supabase Status Badge -->
+                            <button id="supabase-status-badge" onclick="supabaseService.openConfigModal()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 transition-colors cursor-pointer shadow-xs">
+                                <span class="w-2 h-2 rounded-full bg-slate-400"></span> <span>Supabase: Local</span>
+                            </button>
+
                             <div class="relative">
                                 <button id="profile-btn" onclick="app.toggleProfileMenu()" class="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-3 rounded-full border border-slate-200 transition-all shadow-sm">
                                     <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-inner"><i class="ph ph-user"></i></div>
@@ -386,6 +391,7 @@ const app = {
                 </div>
             </div>
         `;
+        if (window.supabaseService) window.supabaseService.updateHeaderBadge();
         this.switchMenu('dashboard');
     },
 
@@ -395,7 +401,7 @@ const app = {
         if(menuId === 'settings') title = "ข้อมูลบริษัท และตั้งค่าคลังสินค้า";
         else if(menuId === 'purchase_payments') title = "แจ้งการชำระเงินจัดซื้อ";
         else if(menuId === 'customers') title = "จัดการข้อมูลลูกค้า/ร้านค้า";
-        else if(menuId === 'sales_orders') title = "รายการสั่งซื้อ (Sales Orders)";
+        else if(menuId === 'sales_orders') title = "รายการสั่งขาย (Sales Orders)";
         else if(menuId === 'sales_receipts') title = "แจ้งการเก็บเงิน (Receipts)";
         else if(menuId === 'so_history') title = "ประวัติการสั่งซื้อลูกค้า";
         else if(menuId === 'tax_invoices') title = "รายการรอออกใบกำกับภาษี";
